@@ -12,7 +12,7 @@ provider adapters must implement. The interface is designed to be:
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import ClassVar, Literal, Mapping
+from typing import Any, ClassVar, Literal, Mapping
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
@@ -117,8 +117,8 @@ class PaymentResult(BaseModel):
     redirect_url: HttpUrl | None = Field(
         None, description="URL to redirect customer (for redirect-based flows)"
     )
-    raw: dict[str, str | int | float | bool | None] = Field(
-        ..., description="Provider's untouched response for debugging"
+    raw: dict[str, Any] = Field(
+        ..., description="Provider's untouched response for debugging (nested JSON allowed)"
     )
 
     model_config = {"strict": True}
@@ -149,8 +149,8 @@ class WebhookEvent(BaseModel):
     provider_payment_id: str = Field(..., description="Provider's payment ID")
     reference: str = Field(..., description="Merchant reference from original intent")
     amount_cents: int = Field(..., gt=0, description="Payment amount in cents")
-    raw: dict[str, str | int | float | bool | None] = Field(
-        ..., description="Provider's untouched webhook payload"
+    raw: dict[str, Any] = Field(
+        ..., description="Provider's untouched webhook payload (nested JSON allowed)"
     )
     received_at: datetime = Field(..., description="When webhook was received (UTC)")
 

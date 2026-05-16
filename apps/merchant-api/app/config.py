@@ -45,6 +45,12 @@ class Settings(BaseSettings):
         description="Use PayFast sandbox environment",
     )
 
+    # Paystack Configuration
+    paystack_secret_key: str = Field(
+        default="",
+        description="Paystack secret key (sk_test_ for sandbox, sk_live_ for production)",
+    )
+
     # Application
     webhook_base_url: str = Field(
         default="http://localhost:8000",

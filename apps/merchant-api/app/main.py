@@ -104,7 +104,7 @@ async def root():
         <h1>🚀 Lekker Pay Demo</h1>
         <div class="info">
             <strong>Test Payment</strong><br>
-            This will create a payment with PayFast sandbox.
+            This will create a payment with your selected provider's sandbox.
         </div>
         
         <form action="/checkout" method="POST" id="checkoutForm">
@@ -121,6 +121,7 @@ async def root():
             <label for="provider">Provider:</label>
             <select id="provider" name="provider">
                 <option value="payfast">PayFast</option>
+                <option value="paystack">Paystack</option>
             </select>
             
             <button type="submit">Create Payment</button>

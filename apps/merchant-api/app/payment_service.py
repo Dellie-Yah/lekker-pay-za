@@ -3,6 +3,7 @@
 from pydantic import HttpUrl
 from lekker_pay import PaymentRouter, PaymentIntent, ProviderConfig
 from lekker_pay.providers.payfast import PayFastAdapter
+from lekker_pay.providers.paystack import PaystackAdapter
 
 from app.config import settings
 
@@ -20,13 +21,21 @@ class PaymentService:
             sandbox=settings.payfast_sandbox,
         )
 
+        # Configure Paystack
+        paystack_config = ProviderConfig(
+            api_key=settings.paystack_secret_key,
+            sandbox=True,  # Determined by sk_test_ vs sk_live_ prefix
+        )
+
         # Initialize router with provider configs
         self.router = PaymentRouter({
             "payfast": payfast_config,
+            "paystack": paystack_config,
         })
 
         # Register adapters
         self.router.register_adapter("payfast", PayFastAdapter)
+        self.router.register_adapter("paystack", PaystackAdapter)
 
     async def create_payment(
         self,

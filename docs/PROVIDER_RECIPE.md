@@ -432,6 +432,85 @@ def verify_webhook(self, headers, body) -> WebhookEvent:
     pass
 ```
 
+### 5. Reference Fidelity
+
+**Use the merchant-supplied `reference`, never the provider's internal numeric `id`.**
+
+The merchant matches orders by `reference` (e.g. `ORDER-ABC123`). Provider-internal IDs (Paystack's `id: 1234567890`, PayFast's `pf_payment_id`) are useful for debugging but are NOT the join key.
+
+```python
+# ✅ CORRECT
+return WebhookEvent(
+    provider=self.provider_name,
+    reference=data["reference"],       # merchant-supplied
+    provider_payment_id=str(data["id"]),  # provider-internal, for debugging
+    ...
+)
+
+# ❌ WRONG - merchant's order lookup will fail
+return WebhookEvent(
+    reference=str(data["id"]),         # internal numeric ID — wrong join key
+    ...
+)
+```
+
+### 6. Full Raw Response Preservation
+
+**`PaymentResult.raw` and `WebhookEvent.raw` store the entire provider response. Never filter.**
+
+```python
+# ✅ CORRECT
+return PaymentResult(
+    redirect_url=HttpUrl(data["authorization_url"]),
+    raw=data,                           # everything — access_code, id, status, etc.
+    ...
+)
+
+# ❌ WRONG - selective pruning makes debugging painful
+return PaymentResult(
+    redirect_url=HttpUrl(data["authorization_url"]),
+    raw={"authorization_url": data["authorization_url"]},  # lost everything else
+    ...
+)
+```
+
+### 7. No Defensive Config Fallbacks
+
+**Use only the `ProviderConfig` fields your provider's documented API actually requires.**
+
+Do NOT add "defensive" code that prefers an alternative config field if it happens to be populated. Silent behaviour changes based on config shape are footguns.
+
+```python
+# ❌ WRONG - silent behaviour change
+def _signing_key(self) -> str:
+    # "if webhook_secret is set, use it, else fall back to api_key"
+    return self.config.webhook_secret or self.config.api_key
+
+# ✅ CORRECT - strict, documented use
+def _signing_key(self) -> str:
+    # Paystack uses the API key for both Bearer auth AND webhook HMAC.
+    # This is intentional — Paystack's public API has no separate webhook secret.
+    return self.config.api_key
+```
+
+If the provider later introduces a new auth shape, that's a separate change with its own tests and migration path — not a silent fallback.
+
+### 8. Adapter Style — No Trivial Helpers
+
+If a "helper" function is doing nothing meaningful, inline it or replace with a module-level constant.
+
+```python
+# ❌ WRONG - misleading helper
+def _get_base_url(self) -> str:
+    """Returns API base URL based on sandbox flag."""
+    if self.config.sandbox:
+        return "https://api.paystack.co"
+    return "https://api.paystack.co"      # same URL — the helper is a lie
+
+# ✅ CORRECT - constant
+_BASE_URL = "https://api.paystack.co"     # same for sandbox and live
+```
+
 ## Testing Requirements
 
 ### Coverage Target
@@ -537,36 +616,64 @@ pytest --cov=lekker_pay/providers/payfast.py --cov-report=term-missing
     - Client closes on exit
     - Returns self on enter
 
+13. **Universal Footgun Regression Tests (these names are binding)**
+    - `test_verify_webhook_uses_constant_time_comparison`
+    - `test_money_conversion_integer_only_no_float_drift`
+    - `test_verify_webhook_uses_raw_bytes_not_parsed_json`
+    - `test_webhook_idempotency_same_input_same_output` — passing the same raw body to `verify_webhook` twice must produce equal `WebhookEvent` objects (the merchant-api handles dedupe via Redis but the adapter must be deterministic)
+    - `test_reference_uses_merchant_supplied_not_internal_id` — verifies `WebhookEvent.reference` and `PaymentResult.reference` carry the merchant's reference, never the provider's internal numeric `id`
+
+14. **Provider-Specific Footgun Tests** — every adapter adds at least one. PayFast's example: `test_empty_passphrase_is_not_appended`. Paystack's example: `test_paystack_api_key_used_for_both_bearer_and_webhook_hmac`.
+
+### Test Placement Rule
+
+Footgun tests live **inside the per-method test class where the behaviour is implemented** (e.g. the idempotency test belongs in `TestVerifyWebhook`, not in a separate dumping-ground class). You may optionally aggregate them into a `TestFootgunRegressions` class for navigability — but they must not exist only there. The behaviour-near-tests pattern means a future maintainer reading `verify_webhook` sees its full safety net beside it.
+
 ### Test Structure Example
 
 ```python
 import pytest
 import respx
 from httpx import Response
-from lekker_pay.providers.newprovider import NewProviderAdapter, NewProviderConfig
-from lekker_pay.base import PaymentIntent, PaymentStatus
-from lekker_pay.errors import *
+from lekker_pay.providers.newprovider import NewProviderAdapter
+from lekker_pay.base import ProviderConfig, PaymentIntent, PaymentStatus
+from lekker_pay.errors import LekkerPayError, AuthenticationError, SignatureMismatchError
 
-class TestNewProviderConfig:
-    """Test configuration model."""
-    
-    def test_config_creation(self) -> None:
-        """Test creating valid configuration."""
-        config = NewProviderConfig(
-            api_key="test_key",
-            webhook_secret="test_secret",
-            sandbox=True,
-        )
-        assert config.api_key == "test_key"
-        assert config.sandbox is True
-    
-    def test_config_is_frozen(self) -> None:
-        """Test configuration is immutable."""
-        config = NewProviderConfig(api_key="test", webhook_secret="secret")
-        with pytest.raises(ValidationError):
-            config.api_key = "new_key"
+class TestNewProviderAdapterInit:
+    """Test adapter initialization and config validation."""
 
-# ... more test classes following the pattern
+    def test_init_with_valid_config(self) -> None:
+        """Adapter accepts a ProviderConfig with required fields populated."""
+        config = ProviderConfig(api_key="sk_test_xxx", sandbox=True)
+        adapter = NewProviderAdapter(config)
+        assert adapter.provider_name == "newprovider"
+
+    def test_init_missing_required_field_raises(self) -> None:
+        """Adapter raises ValueError when required field is missing."""
+        config = ProviderConfig(sandbox=True)  # api_key is None
+        with pytest.raises(ValueError, match="api_key"):
+            NewProviderAdapter(config)
+
+class TestVerifyWebhook:
+    """Test webhook signature verification — includes footgun regressions."""
+
+    def test_verify_webhook_uses_constant_time_comparison(self) -> None:
+        """Signature comparison must use hmac.compare_digest, never ==."""
+        ...
+
+    def test_verify_webhook_uses_raw_bytes_not_parsed_json(self) -> None:
+        """Signature is computed over the raw bytes — re-serialized JSON fails."""
+        ...
+
+    def test_webhook_idempotency_same_input_same_output(self) -> None:
+        """Same raw body twice must produce equal WebhookEvent objects."""
+        ...
+
+    def test_reference_uses_merchant_supplied_not_internal_id(self) -> None:
+        """WebhookEvent.reference is the merchant reference, not provider id."""
+        ...
+
+# ... more test classes following the per-method pattern
 ```
 
 ## Documentation Requirements
@@ -711,6 +818,12 @@ When in doubt, **copy PayFast's structure exactly**. It's battle-tested at 99% c
 6. **Not testing all status mappings** → Test every provider status
 7. **Skipping async context manager tests** → Test `__aenter__`/`__aexit__`
 8. **Coverage below 95%** → Add tests for uncovered branches
+9. **Using provider's internal numeric `id` as `reference`** → The merchant joins on `reference` (their supplied value); the provider's `id` belongs in `raw`/`provider_payment_id` only
+10. **Filtering `PaymentResult.raw` to "useful" fields** → Store the entire provider response; debugging needs the full payload
+11. **Adding defensive fallbacks to alternative `ProviderConfig` fields** → Use only the fields the provider's documented API requires; silent behaviour change based on config shape is a footgun
+12. **Writing helpers for trivial computations** → If `_get_base_url()` returns the same constant in both branches, it's a lie — use a module-level constant
+13. **Lumping all footgun tests into `TestFootgunRegressions`** → Footgun tests live in the per-method class where the behaviour is implemented; aggregation class is optional navigation only
+14. **Skipping the idempotency test** → The same webhook body twice must produce equal `WebhookEvent`s; the adapter must be deterministic even though merchant-api dedupes via Redis
 
 ## Next Steps
 

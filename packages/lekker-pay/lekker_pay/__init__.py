@@ -55,6 +55,7 @@ from lekker_pay.errors import (
 )
 from lekker_pay.router import PaymentRouter
 from lekker_pay.providers.payfast import PayFastAdapter, PayFastConfig
+from lekker_pay.providers.paystack import PaystackAdapter
 
 __all__ = [
     # Version
@@ -71,6 +72,7 @@ __all__ = [
     # Providers
     "PayFastAdapter",
     "PayFastConfig",
+    "PaystackAdapter",
     # Exceptions
     "LekkerPayError",
     "ProviderError",

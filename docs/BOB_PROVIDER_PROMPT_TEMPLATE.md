@@ -76,11 +76,30 @@ Status mapping (provider → PaymentStatus):
 ### Signatures
 - Every signature comparison uses `hmac.compare_digest`. Writing `==` between signature strings is a failure.
 - Webhook signature verification reads **raw bytes** from `body`, not Pydantic-parsed JSON.
-- If the provider's webhook secret is distinct from the API key, the config has both fields and the adapter cannot mix them up — write a dedicated regression test for this.
+- Some providers reuse one secret for both API auth AND webhook HMAC (Paystack); others use a distinct webhook secret (Yoco). Either is acceptable — but write a regression test naming the exact behaviour you implemented, so a future contributor can't accidentally flip it.
 
 ### Webhook contract
 - `verify_webhook(headers, body) -> WebhookEvent` is **synchronous**. No I/O. No `async`.
 - If the provider offers server-side verification (e.g. PayFast's `/eng/query/validate`), expose it as a **separate async method**. Never fold it into `verify_webhook`. The merchant-api calls them as a two-step pattern.
+- **Idempotency:** `verify_webhook` must be deterministic — the same `body` bytes passed twice must produce equal `WebhookEvent` objects. The merchant-api dedupes via Redis but the adapter cannot rely on that.
+
+### Reference fidelity
+- `WebhookEvent.reference` and `PaymentResult.reference` always carry the **merchant-supplied reference** (e.g. `"ORDER-ABC123"`), never the provider's internal numeric `id`.
+- The provider's internal id belongs in `provider_payment_id` (stringified) and in `raw`, for debugging only.
+- The merchant joins orders by `reference`. Using the provider's id silently breaks order lookup.
+
+### Raw response preservation
+- `PaymentResult.raw` and `WebhookEvent.raw` store the **entire** provider response dict. Never filter, never prune to "useful" fields.
+- Debugging payments requires the full payload. Selective storage means production incidents take longer to diagnose.
+
+### No defensive config fallbacks
+- Use only the `ProviderConfig` fields your provider's documented API requires.
+- Do NOT add `config.webhook_secret or config.api_key`-style fallbacks. Silent behaviour change based on which config field is populated is a footgun.
+- If the provider later adds a new auth shape, that's a separate change with its own tests — not a hidden fallback.
+
+### Adapter style
+- Module-level constants for URLs and other compile-time values. If a `_get_base_url()` "helper" returns the same string in both branches, replace it with a constant. Misleading helpers are worse than no helpers.
+- No `Any` types in public signatures. Type the actual shape, even when it's a `dict[str, str | int | bool]` — judges and Bob both read public surfaces.
 
 ### Errors
 - Every adapter exception inherits from `LekkerPayError`. Map:
@@ -104,11 +123,14 @@ Status mapping (provider → PaymentStatus):
 - [ ] `ruff check` clean
 - [ ] `ruff format --check` clean
 - [ ] No `Any` types in public method signatures
-- [ ] Four footgun regression tests present and passing **by these exact names**:
+- [ ] Five **universal** footgun regression tests present and passing by these exact names:
   1. `test_verify_webhook_uses_constant_time_comparison`
   2. `test_money_conversion_integer_only_no_float_drift`
   3. `test_verify_webhook_uses_raw_bytes_not_parsed_json`
-  4. `test_<<provider-specific-footgun>>` — the analogous failure mode you identified in the confirmation step
+  4. `test_webhook_idempotency_same_input_same_output`
+  5. `test_reference_uses_merchant_supplied_not_internal_id`
+- [ ] At least one **provider-specific** footgun test, named after the failure mode (e.g. `test_empty_passphrase_is_not_appended` for PayFast, `test_<<provider>>_api_key_used_for_both_bearer_and_webhook_hmac` for Paystack)
+- [ ] Footgun tests live inside the per-method class where the behaviour is implemented (the idempotency test belongs in `TestVerifyWebhook`, not a separate dumping-ground class). A `TestFootgunRegressions` aggregation class is optional navigation only — these tests must not exist *only* there.
 
 ## Workflow
 
