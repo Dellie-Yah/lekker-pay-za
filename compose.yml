@@ -1,0 +1,61 @@
+# version field is obsolete in Docker Compose v2+
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lekker-pay-postgres
+    environment:
+      POSTGRES_DB: lekker_pay
+      POSTGRES_USER: lekker_pay
+      POSTGRES_PASSWORD: lekker_pay_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lekker_pay"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: lekker-pay-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  merchant-api:
+    build:
+      context: .
+      dockerfile: apps/merchant-api/Dockerfile
+    container_name: lekker-pay-api
+    env_file:
+      - .env
+    environment:
+      # Override database and redis URLs to use container hostnames
+      DATABASE_URL: postgresql+asyncpg://lekker_pay:lekker_pay_dev@postgres:5432/lekker_pay
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./apps/merchant-api:/app
+      - ./packages/lekker-pay:/packages/lekker-pay
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
+
+# Made with Bob
