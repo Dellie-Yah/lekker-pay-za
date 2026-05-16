@@ -39,23 +39,36 @@ packages/lekker-pay/
 
 ## Implementation Steps
 
-### Step 1: Create Provider Configuration Model
+### Step 1: Use the Generic ProviderConfig
+
+Lekker Pay uses **one** configuration model — `ProviderConfig` in [`base.py`](../packages/lekker-pay/lekker_pay/base.py). It has every field any provider could need; supply only the ones your provider uses and leave the rest at their `None` defaults.
 
 ```python
-from pydantic import BaseModel, Field
+from lekker_pay.base import ProviderConfig
 
-class NewProviderConfig(BaseModel):
-    """
-    Configuration for NewProvider adapter.
-    
-    All fields use ProviderConfig base, selecting only what's needed.
-    """
-    api_key: str = Field(..., description="API key from provider dashboard")
-    webhook_secret: str = Field(..., description="Webhook signature secret")
-    sandbox: bool = Field(default=True, description="Use sandbox environment")
-    
-    model_config = {"frozen": True, "strict": True}
+# PayFast uses:
+config = ProviderConfig(
+    merchant_id="10000100",
+    merchant_key="46f0cd694581a",
+    passphrase="",          # empty for sandbox without passphrase
+    sandbox=True,
+)
+
+# Paystack uses:
+config = ProviderConfig(
+    api_key="sk_test_...",  # the Paystack secret key
+    sandbox=True,
+)
+
+# Yoco would use:
+config = ProviderConfig(
+    api_key="sk_test_...",
+    webhook_secret="whsec_...",
+    sandbox=True,
+)
 ```
+
+Do **not** create a per-provider config dataclass or Pydantic model. The generic `ProviderConfig` is the single source of truth for adapter configuration. This keeps `payment_service.py` provider-agnostic and the SaaS migration path clean — each tenant's stored credentials are one Pydantic shape, not N shapes.
 
 ### Step 2: Implement BasePaymentAdapter
 
@@ -637,25 +650,26 @@ The PayFast adapter ([`payfast.py`](../packages/lekker-pay/lekker_pay/providers/
 - ✅ Proper error handling and mapping
 - ✅ Money handling as integers (never floats)
 - ✅ Constant-time signature comparison
-- ✅ **Stateless dataclass config** (not generic Pydantic)
+- ✅ **Stateless config via generic `ProviderConfig`** (constructor-injected, no env reads inside the adapter)
 - ✅ **Per-method test class structure** (TestCreatePayment, TestVerifyWebhook, etc.)
 - ✅ **Four footgun regression tests** (constant-time, integer money, raw bytes, two-step)
 
 ### Key PayFast Patterns to Follow
 
-1. **Stateless Dataclass Config**
+1. **Stateless ProviderConfig**
    ```python
-   @dataclass(frozen=True, slots=True)
-   class PayFastConfig:
-       merchant_id: str
-       merchant_key: str
-       passphrase: str
-       sandbox: bool = True
-       timeout: float = 30.0
+   from lekker_pay.base import ProviderConfig
+
+   # Supply only the fields your provider needs — others stay None.
+   config = ProviderConfig(
+       merchant_id="10000100",
+       merchant_key="46f0cd694581a",
+       passphrase="",
+       sandbox=True,
+   )
+   adapter = PayFastAdapter(config)
    ```
-   - Use `@dataclass(frozen=True)` for immutability
-   - Use `slots=True` for memory efficiency
-   - Don't use generic `ProviderConfig` - create provider-specific config
+   No per-provider dataclass. No env reads inside the adapter — strict constructor injection.
 
 2. **Two-Step Webhook Pattern**
    ```python
