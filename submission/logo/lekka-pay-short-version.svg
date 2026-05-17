@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Monogram: tile + post + rail + amber payload -->
+  <rect width="128" height="128" fill="#0F172A" />
+  <rect x="32" y="32" width="16" height="64" fill="#FFFFFF" />
+  <rect x="32" y="80" width="96" height="16" fill="#FFFFFF" />
+  <circle cx="88" cy="72" r="8" fill="#F59E0B" />
+</svg>

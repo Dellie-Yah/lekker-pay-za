@@ -1,0 +1,12 @@
+{
+  "name": "lekker-pay-submission-deck",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build script for the IBM Bob Hackathon submission deck.",
+  "scripts": {
+    "build": "node build-deck.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

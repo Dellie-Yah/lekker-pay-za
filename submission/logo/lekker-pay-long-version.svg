@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 128" width="1000" height="128">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600&amp;display=swap');
+      .wordmark {
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        font-size: 42px;
+        fill: #0F172A;
+        letter-spacing: -1.5px;
+      }
+    </style>
+  </defs>
+
+  <!-- Monogram tile -->
+  <rect width="128" height="128" fill="#0F172A" />
+  <rect x="32" y="32" width="16" height="64" fill="#FFFFFF" />
+  <rect x="32" y="80" width="96" height="16" fill="#FFFFFF" />
+  <circle cx="88" cy="72" r="8" fill="#F59E0B" />
+
+  <!-- Wordmark -->
+  <text x="152" y="82" class="wordmark">Lekker Pay</text>
+
+  <!-- Long rail extending past wordmark to the right margin -->
+  <rect x="410" y="80" width="590" height="16" fill="#0F172A" />
+</svg>

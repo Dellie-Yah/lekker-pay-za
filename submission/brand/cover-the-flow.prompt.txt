@@ -1,0 +1,13 @@
+# Midjourney prompt for cover-the-flow.png
+# Tool: Midjourney v7 (or v6)
+# Output: 16:9, 1.2 MB PNG, ~1456×816 px
+
+/imagine prompt: editorial infrastructural illustration, abstract topographic silhouette of southern Africa rendered as a single soft outline in slate navy #0F172A on near-white background, thin precise network lines representing payment flows originating from small dark filled circles at city positions, all lines converging onto one central node, that single central node is amber yellow #F59E0B and is the only colour accent in the entire image, generous negative space, architectural flat vector aesthetic, MoMA infographic meets Stripe documentation art, calm restrained infrastructural mood, no text no labels --ar 16:9 --style raw --v 7 --s 100 --no text borders countries multiple-amber-nodes people gradients sunsets
+
+# Selection: 4th candidate in the grid (southern Africa with Madagascar visible to the right,
+# single amber radiating sun-like node in centre-left, slate-navy lines emanating outward).
+# Selected because:
+#   1. Only candidate showing actual southern Africa (others showed West Africa coastline)
+#   2. Single amber focal point (not a cluster — matches the brand's "one accent moment" rule)
+#   3. Cream/off-white background pairs warmer with slate-900 + amber palette
+#   4. Generous empty left third — ideal for title-slide text overlay
