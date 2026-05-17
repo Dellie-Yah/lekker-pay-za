@@ -1,6 +1,6 @@
 # Environment and secrets
 .env
-.env.*
+
 secrets/
 *.key
 *.pem

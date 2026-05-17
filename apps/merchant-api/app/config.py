@@ -3,14 +3,13 @@
 from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sys import path
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=Path(Path.cwd() / ".env"),
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
@@ -49,6 +48,11 @@ class Settings(BaseSettings):
     paystack_secret_key: str = Field(
         default="",
         description="Paystack secret key (sk_test_ for sandbox, sk_live_ for production)",
+    )
+
+    paystack_public_key: str = Field(
+        default="",
+        description="Paystack public key (pk_test_ for sandbox, pk_live_ for production)",
     )
 
     # Application
